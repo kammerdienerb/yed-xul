@@ -803,6 +803,7 @@ void normal(int key, char *key_str) {
             break;
 
         case 'a':
+            YEXE("cursor-right");
             goto enter_insert;
         case 'A':
             YEXE("cursor-line-end");
