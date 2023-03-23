@@ -49,6 +49,7 @@ static char        last_till_op;
 static int         num_undo_records_before_insert;
 static int         restore_cursor_line;
 static int         visual;
+static int         last_nav_key;
 
 void unload(yed_plugin *self);
 void normal(int key, char* key_str);
@@ -484,6 +485,7 @@ out:
 }
 
 int nav_common(int key, char *key_str) {
+    int is_line_sel;
     int save_cursor_line;
 
     if (till_pending == 1) {
@@ -493,6 +495,11 @@ int nav_common(int key, char *key_str) {
         do_till_bw(key, till_pending == 3);
         goto out;
     }
+
+    is_line_sel = (   ys->active_frame
+                   && ys->active_frame->buffer
+                   && ys->active_frame->buffer->has_selection
+                   && ys->active_frame->buffer->selection.kind == RANGE_LINE);
 
 
     switch (key) {
@@ -505,6 +512,10 @@ int nav_common(int key, char *key_str) {
             YEXE("cursor-left");
             break;
         case 'H':
+            if (!visual && is_line_sel) {
+                YEXE("select-off");
+                YEXE("select");
+            }
             YEXE("cursor-left");
             break;
 
@@ -543,6 +554,10 @@ int nav_common(int key, char *key_str) {
                 YEXE("select");
             }
         case 'L':
+            if (!visual && is_line_sel) {
+                YEXE("select-off");
+                YEXE("select");
+            }
             YEXE("cursor-right");
             break;
 
@@ -572,6 +587,10 @@ int nav_common(int key, char *key_str) {
                 YEXE("select");
             }
         case 'W':
+            if (!visual && is_line_sel) {
+                YEXE("select-off");
+                YEXE("select");
+            }
             YEXE("cursor-next-word");
             break;
 
@@ -581,6 +600,10 @@ int nav_common(int key, char *key_str) {
                 YEXE("select");
             }
         case 'B':
+            if (!visual && is_line_sel) {
+                YEXE("select-off");
+                YEXE("select");
+            }
             YEXE("cursor-prev-word");
             break;
 
@@ -722,6 +745,7 @@ int nav_common(int key, char *key_str) {
     }
 
 out:
+    last_nav_key = toupper(key);
     return 1;
 }
 
