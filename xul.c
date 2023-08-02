@@ -50,19 +50,25 @@ static int         num_undo_records_before_insert;
 static int         restore_cursor_line;
 static int         visual;
 static int         last_nav_key;
+static int         save_nav_key;
+static int         save_action;
+static array_t     insert_repeat_keys;
+static int         repeating;
 
 void unload(yed_plugin *self);
-void normal(int key, char* key_str);
-void insert(int key, char* key_str);
+void efocus(yed_event *event);
+void normal(int key);
+void insert(int key);
 void bind_keys(void);
-void change_mode(int new_mode, int by_line, int cancel);
+void change_mode(int new_mode);
 void enter_insert(void);
 void exit_insert(void);
 void make_binding(int b_mode, int n_keys, int *keys, char *cmd, int n_args, char **args);
 void remove_binding(int b_mode, int n_keys, int *keys);
 
 int yed_plugin_boot(yed_plugin *self) {
-    int i;
+    int               i;
+    yed_event_handler focus_handler;
 
     YED_PLUG_VERSION_CHECK();
 
@@ -72,7 +78,13 @@ int yed_plugin_boot(yed_plugin *self) {
         mode_bindings[i] = array_make(key_binding);
     }
 
+    insert_repeat_keys = array_make(int);
+
     yed_plugin_set_unload_fn(Self, unload);
+
+    focus_handler.kind = EVENT_BUFFER_FOCUSED;
+    focus_handler.fn   = efocus;
+    yed_plugin_add_event_handler(self, focus_handler);
 
     yed_plugin_set_command(Self, "xul-take-key",    xul_take_key);
     yed_plugin_set_command(Self, "xul-bind",        xul_bind);
@@ -96,7 +108,7 @@ int yed_plugin_boot(yed_plugin *self) {
         yed_set_var("xul-insert-no-cursor-line", "yes");
     }
 
-    change_mode(MODE_NORMAL, 0, 0);
+    change_mode(MODE_NORMAL);
     yed_set_var("xul-mode", mode_strs[mode]);
     yed_set_var("enable-search-cursor-move", "yes");
 
@@ -119,6 +131,15 @@ void unload(yed_plugin *self) {
         }
         array_free(mode_bindings[i]);
     }
+}
+
+void efocus(yed_event *event) {
+    if (mode != MODE_NORMAL)                     { return; }
+    if (ys->active_frame         == NULL)        { return; }
+    if (ys->active_frame->buffer == NULL)        { return; }
+    if (ys->active_frame->buffer->has_selection) { return; }
+
+    YEXE("select-lines");
 }
 
 void bind_keys(void) {
@@ -164,7 +185,7 @@ void bind_keys(void) {
     }
 }
 
-void change_mode(int new_mode, int by_line, int cancel) {
+void change_mode(int new_mode) {
     char         key_str[32];
     key_binding *b;
 
@@ -225,8 +246,8 @@ static void _take_key(int key, char *maybe_key_str) {
     }
 
     switch (mode) {
-        case MODE_NORMAL: normal(key, key_str); break;
-        case MODE_INSERT: insert(key, key_str); break;
+        case MODE_NORMAL: normal(key); break;
+        case MODE_INSERT: insert(key); break;
         default:
             LOG_FN_ENTER();
             yed_log("[!] invalid mode (?)");
@@ -417,7 +438,7 @@ void remove_binding(int b_mode, int n_keys, int *keys) {
 }
 
 void xul_exit_insert(int n_args, char **args) {
-    change_mode(MODE_NORMAL, 0, 0);
+    change_mode(MODE_NORMAL);
 }
 
 static void do_till_fw(int key) {
@@ -484,7 +505,8 @@ out:
     return;
 }
 
-int nav_common(int key, char *key_str) {
+int nav_common(int key) {
+    int has_sel;
     int is_line_sel;
     int save_cursor_line;
 
@@ -496,11 +518,16 @@ int nav_common(int key, char *key_str) {
         goto out;
     }
 
-    is_line_sel = (   ys->active_frame
+    has_sel     =     ys->active_frame
                    && ys->active_frame->buffer
-                   && ys->active_frame->buffer->has_selection
-                   && ys->active_frame->buffer->selection.kind == RANGE_LINE);
+                   && ys->active_frame->buffer->has_selection;
 
+    is_line_sel =     has_sel
+                   && ys->active_frame->buffer->selection.kind == RANGE_LINE;
+
+    if (!has_sel) {
+        YEXE("select-lines");
+    }
 
     switch (key) {
         case 'h':
@@ -745,12 +772,14 @@ int nav_common(int key, char *key_str) {
     }
 
 out:
-    last_nav_key = toupper(key);
+    last_nav_key = isprint(key) ? tolower(key) : key;
     return 1;
 }
 
-void normal(int key, char *key_str) {
-    if (nav_common(key, key_str)) {
+void normal(int key) {
+    int *key_it;
+
+    if (nav_common(key)) {
         return;
     }
 
@@ -760,7 +789,7 @@ void normal(int key, char *key_str) {
             YEXE("yank-selection", "1");
             YEXE("delete-back");
             YEXE("select-off");
-            change_mode(MODE_INSERT, 0, 0);
+            change_mode(MODE_INSERT);
             break;
         case 'd':
             visual = 0;
@@ -812,7 +841,7 @@ void normal(int key, char *key_str) {
 enter_insert:
             visual = 0;
             YEXE("select-off");
-            change_mode(MODE_INSERT, 0, 0);
+            change_mode(MODE_INSERT);
             break;
 
         case DEL_KEY:
@@ -835,8 +864,21 @@ enter_insert:
             break;
 
         case '.':
-            YEXE("select-off");
-            YEXE("select-lines");
+            repeating = 1;
+            if (save_action == 'a'
+            ||  save_action == 'A'
+            ||  save_action == 'i') {
+
+                change_mode(MODE_INSERT);
+                array_traverse(insert_repeat_keys, key_it) {
+                    insert(*key_it);
+                }
+                change_mode(MODE_NORMAL);
+            } else {
+                nav_common(save_nav_key);
+                normal(save_action);
+            }
+            repeating = 0;
             break;
 
         case ':':
@@ -853,9 +895,16 @@ enter_insert:
         default:
             yed_cerr("[NORMAL] unhandled key %d", key);
     }
+
+    if (key != '.' && isprint(key)) {
+        save_nav_key = last_nav_key;
+        save_action  = key;
+    }
 }
 
-void insert(int key, char *key_str) {
+void insert(int key) {
+    char key_str[32];
+
     switch (key) {
         case ARROW_LEFT:
             YEXE("cursor-left");
@@ -899,22 +948,30 @@ void insert(int key, char *key_str) {
 
         case ESC:
         case CTRL_C:
-            change_mode(MODE_NORMAL, 0, 1);
+            change_mode(MODE_NORMAL);
             break;
 
         default:
             if (key == ENTER || key == TAB || key == MBYTE || !iscntrl(key)) {
+                snprintf(key_str, sizeof(key_str), "%d", key);
                 YEXE("insert", key_str);
             } else {
                 yed_cerr("[INSERT] unhandled key %d", key);
             }
     }
 
+    if (mode == MODE_INSERT && !repeating) {
+        array_push(insert_repeat_keys, key);
+    }
 }
 
 void enter_insert(void) {
     yed_frame  *frame;
     yed_buffer *buff;
+
+    if (!repeating) {
+        array_clear(insert_repeat_keys);
+    }
 
     frame = ys->active_frame;
 
