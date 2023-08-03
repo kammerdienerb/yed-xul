@@ -56,6 +56,7 @@ static array_t     insert_repeat_keys;
 static int         repeating;
 
 void unload(yed_plugin *self);
+void edraw(yed_event *event);
 void efocus(yed_event *event);
 void normal(int key);
 void insert(int key);
@@ -68,7 +69,7 @@ void remove_binding(int b_mode, int n_keys, int *keys);
 
 int yed_plugin_boot(yed_plugin *self) {
     int               i;
-    yed_event_handler focus_handler;
+    yed_event_handler handler;
 
     YED_PLUG_VERSION_CHECK();
 
@@ -82,9 +83,13 @@ int yed_plugin_boot(yed_plugin *self) {
 
     yed_plugin_set_unload_fn(Self, unload);
 
-    focus_handler.kind = EVENT_BUFFER_FOCUSED;
-    focus_handler.fn   = efocus;
-    yed_plugin_add_event_handler(self, focus_handler);
+    handler.kind = EVENT_PRE_DRAW_EVERYTHING;
+    handler.fn   = edraw;
+    yed_plugin_add_event_handler(self, handler);
+
+    handler.kind = EVENT_BUFFER_PRE_FOCUS;
+    handler.fn   = efocus;
+    yed_plugin_add_event_handler(self, handler);
 
     yed_plugin_set_command(Self, "xul-take-key",    xul_take_key);
     yed_plugin_set_command(Self, "xul-bind",        xul_bind);
@@ -133,13 +138,27 @@ void unload(yed_plugin *self) {
     }
 }
 
-void efocus(yed_event *event) {
-    if (mode != MODE_NORMAL)                     { return; }
+void edraw(yed_event *event) {
+    if (mode                     != MODE_NORMAL) { return; }
     if (ys->active_frame         == NULL)        { return; }
     if (ys->active_frame->buffer == NULL)        { return; }
     if (ys->active_frame->buffer->has_selection) { return; }
 
+    visual = 0;
     YEXE("select-lines");
+}
+
+void efocus(yed_event *event) {
+    if (mode                     != MODE_NORMAL)  { return; }
+    if (ys->active_frame         == NULL)         { return; }
+    if (ys->active_frame->buffer == NULL)         { return; }
+
+
+    visual = 0;
+
+    if (ys->active_frame->buffer->has_selection) {
+        YEXE("select-off");
+    }
 }
 
 void bind_keys(void) {
@@ -771,8 +790,23 @@ int nav_common(int key) {
             return 0;
     }
 
-out:
-    last_nav_key = isprint(key) ? tolower(key) : key;
+    if (isprint(key)) {
+        switch (key) {
+            case 'f':
+            case 'F':
+            case 't':
+            case 'T':
+                last_nav_key = key;
+                break;
+            default:
+                last_nav_key = tolower(key);
+                break;
+        }
+    } else {
+        last_nav_key = key;
+    }
+
+out:;
     return 1;
 }
 
@@ -876,6 +910,13 @@ enter_insert:
                 change_mode(MODE_NORMAL);
             } else {
                 nav_common(save_nav_key);
+
+                if (save_nav_key == 'f' || save_nav_key == 'F'
+                ||  save_nav_key == 't' || save_nav_key == 'T') {
+
+                    nav_common(last_till_key);
+                }
+
                 normal(save_action);
             }
             repeating = 0;
