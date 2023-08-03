@@ -139,20 +139,21 @@ void unload(yed_plugin *self) {
 }
 
 void edraw(yed_event *event) {
-    if (mode                     != MODE_NORMAL) { return; }
-    if (ys->active_frame         == NULL)        { return; }
-    if (ys->active_frame->buffer == NULL)        { return; }
-    if (ys->active_frame->buffer->has_selection) { return; }
+    if (mode                     != MODE_NORMAL)        { return; }
+    if (ys->active_frame         == NULL)               { return; }
+    if (ys->active_frame->buffer == NULL)               { return; }
+    if (ys->active_frame->buffer->flags & BUFF_SPECIAL) { return; }
+    if (ys->active_frame->buffer->has_selection)        { return; }
 
     visual = 0;
     YEXE("select-lines");
 }
 
 void efocus(yed_event *event) {
-    if (mode                     != MODE_NORMAL)  { return; }
-    if (ys->active_frame         == NULL)         { return; }
-    if (ys->active_frame->buffer == NULL)         { return; }
-
+    if (mode                     != MODE_NORMAL)        { return; }
+    if (ys->active_frame         == NULL)               { return; }
+    if (ys->active_frame->buffer == NULL)               { return; }
+    if (ys->active_frame->buffer->flags & BUFF_SPECIAL) { return; }
 
     visual = 0;
 
