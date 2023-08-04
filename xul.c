@@ -904,7 +904,7 @@ enter_insert:
             ||  save_action == 'A'
             ||  save_action == 'i') {
 
-                change_mode(MODE_INSERT);
+                normal(save_action);
                 array_traverse(insert_repeat_keys, key_it) {
                     insert(*key_it);
                 }
