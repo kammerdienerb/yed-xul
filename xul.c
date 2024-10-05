@@ -195,7 +195,7 @@ void bind_keys(void) {
     }
 
     for (key = 1; key < REAL_KEY_MAX; key += 1) {
-        sprintf(key_str, "%d", key);
+        snprintf(key_str, sizeof(key_str), "%d", key);
         YPBIND(Self, key, "xul-take-key", key_str);
     }
 
@@ -214,7 +214,7 @@ void change_mode(int new_mode) {
         if (b->len > 1) {
             yed_delete_key_sequence(b->key);
         } else if (b->key < REAL_KEY_MAX) {
-            sprintf(key_str, "%d", b->key);
+            snprintf(key_str, sizeof(key_str), "%d", b->key);
             YPBIND(Self, b->key, "xul-take-key", key_str);
         }
     }
@@ -261,7 +261,7 @@ static void _take_key(int key, char *maybe_key_str) {
     if (maybe_key_str) {
         key_str = maybe_key_str;
     } else {
-        sprintf(buff, "%d", key);
+        snprintf(buff, sizeof(buff), "%d", key);
         key_str = buff;
     }
 
@@ -481,7 +481,7 @@ static void do_till_fw(int key) {
             yed_set_cursor_within_frame(f, f->cursor_line, col);
             break;
         }
-        col += yed_get_glyph_width(*g);
+        col += yed_get_glyph_width(g);
     }
 
     last_till_key = key;
@@ -511,7 +511,7 @@ static void do_till_bw(int key, int stop_before) {
         if (g->c == key) {
             yed_set_cursor_within_frame(f,
                                         f->cursor_line,
-                                        col + (stop_before * yed_get_glyph_width(*g)));
+                                        col + (stop_before * yed_get_glyph_width(g)));
             break;
         }
         if (col == 1) { break; } /* Didn't find it. Prevent endless loop. */
