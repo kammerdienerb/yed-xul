@@ -1021,7 +1021,7 @@ void enter_insert(void) {
         buff = frame->buffer;
 
         if (buff) {
-            num_undo_records_before_insert = yed_get_undo_num_records(buff);
+            num_undo_records_before_insert = yed_num_undo_records(buff);
         }
     }
 
@@ -1043,7 +1043,7 @@ void exit_insert(void) {
 
         if (buff) {
 
-            while (yed_get_undo_num_records(buff) > num_undo_records_before_insert + 1) {
+            while (yed_num_undo_records(buff) > num_undo_records_before_insert + 1) {
                 yed_merge_undo_records(buff);
             }
         }
